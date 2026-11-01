@@ -151,80 +151,91 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // 2. EDIT EXISTING SALARY RECORD
     elseif ($action === "edit_salary") {
         $payrollId      = (int)($_POST["payroll_id"] ?? 0);
-        $payPeriodStart = trim($_POST["pay_period_start"] ?? "");
-        $payPeriodEnd   = trim($_POST["pay_period_end"] ?? "");
-        $salaryType     = $_POST["salary_type"] ?? "hourly";
-        $paymentDate    = trim($_POST["payment_date"] ?? date("Y-m-d"));
-        $paymentMethod  = $_POST["payment_method"] ?? "cash";
-        $status         = $_POST["status"] ?? "paid";
-        $notes          = trim($_POST["notes"] ?? "");
-        $referenceNo    = trim($_POST["reference_no"] ?? "");
 
-        $hoursWorked    = max(0.0, (float)($_POST["hours_worked"] ?? 0));
-        $daysWorked     = max(0.0, (float)($_POST["days_worked"] ?? 0));
-        $hourlyRate     = max(0.0, (float)($_POST["hourly_rate"] ?? 0));
-        $baseSalary     = max(0.0, (float)($_POST["base_salary"] ?? 0));
+        // Security / Business rule check: Prevent editing if already paid
+        $checkStmt = $conn->prepare("SELECT status FROM payroll_records WHERE payroll_id = ?");
+        $checkStmt->bind_param("i", $payrollId);
+        $checkStmt->execute();
+        $existingRecord = $checkStmt->get_result()->fetch_assoc();
 
-        $overtimeHours  = max(0.0, (float)($_POST["overtime_hours"] ?? 0));
-        $overtimeRate   = max(0.0, (float)($_POST["overtime_rate"] ?? 0));
-        $overtimePay    = max(0.0, (float)($_POST["overtime_pay"] ?? 0));
-        $allowances     = max(0.0, (float)($_POST["allowances"] ?? 0));
-
-        $sssDeduction        = max(0.0, (float)($_POST["sss_deduction"] ?? 0));
-        $philhealthDeduction = max(0.0, (float)($_POST["philhealth_deduction"] ?? 0));
-        $pagibigDeduction    = max(0.0, (float)($_POST["pagibig_deduction"] ?? 0));
-        $taxDeduction        = max(0.0, (float)($_POST["tax_deduction"] ?? 0));
-        $otherDeductions     = max(0.0, (float)($_POST["other_deductions"] ?? 0));
-
-        $grossPay        = max(0.0, (float)($_POST["gross_pay"] ?? ($baseSalary + $overtimePay + $allowances)));
-        $totalDeductions = max(0.0, (float)($_POST["deductions"] ?? ($sssDeduction + $philhealthDeduction + $pagibigDeduction + $taxDeduction + $otherDeductions)));
-        $netPay          = max(0.0, $grossPay - $totalDeductions);
-
-        $upQuery = "UPDATE payroll_records SET
-            reference_no = ?, pay_period_start = ?, pay_period_end = ?, salary_type = ?,
-            base_salary = ?, hours_worked = ?, days_worked = ?, hourly_rate = ?,
-            overtime_hours = ?, overtime_rate = ?, overtime_pay = ?, allowances = ?,
-            gross_pay = ?, sss_deduction = ?, philhealth_deduction = ?, pagibig_deduction = ?,
-            tax_deduction = ?, other_deductions = ?, deductions = ?, net_pay = ?,
-            payment_date = ?, payment_method = ?, status = ?, notes = ?, processed_by = ?
-            WHERE payroll_id = ?";
-
-        $upStmt = $conn->prepare($upQuery);
-        $upStmt->bind_param(
-            "ssssddddddddddddddddssssii",
-            $referenceNo,
-            $payPeriodStart,
-            $payPeriodEnd,
-            $salaryType,
-            $baseSalary,
-            $hoursWorked,
-            $daysWorked,
-            $hourlyRate,
-            $overtimeHours,
-            $overtimeRate,
-            $overtimePay,
-            $allowances,
-            $grossPay,
-            $sssDeduction,
-            $philhealthDeduction,
-            $pagibigDeduction,
-            $taxDeduction,
-            $otherDeductions,
-            $totalDeductions,
-            $netPay,
-            $paymentDate,
-            $paymentMethod,
-            $status,
-            $notes,
-            $currentUserId,
-            $payrollId
-        );
-
-        if ($upStmt->execute()) {
-            $success = "Payroll record #$payrollId ($referenceNo) was updated successfully.";
-            log_activity($conn, $currentUserId, "SALARY_UPDATED", "Updated salary record #$payrollId ($referenceNo, Net: ₱" . number_format($netPay, 2) . ")");
+        if ($existingRecord && $existingRecord["status"] === "paid") {
+            $error = "Paid salary disbursement vouchers cannot be edited. Only pending vouchers may be modified.";
         } else {
-            $error = "Error updating payroll record: " . $conn->error;
+            $payPeriodStart = trim($_POST["pay_period_start"] ?? "");
+            $payPeriodEnd   = trim($_POST["pay_period_end"] ?? "");
+            $salaryType     = $_POST["salary_type"] ?? "hourly";
+            $paymentDate    = trim($_POST["payment_date"] ?? date("Y-m-d"));
+            $paymentMethod  = $_POST["payment_method"] ?? "cash";
+            $status         = $_POST["status"] ?? "paid";
+            $notes          = trim($_POST["notes"] ?? "");
+            $referenceNo    = trim($_POST["reference_no"] ?? "");
+
+            $hoursWorked    = max(0.0, (float)($_POST["hours_worked"] ?? 0));
+            $daysWorked     = max(0.0, (float)($_POST["days_worked"] ?? 0));
+            $hourlyRate     = max(0.0, (float)($_POST["hourly_rate"] ?? 0));
+            $baseSalary     = max(0.0, (float)($_POST["base_salary"] ?? 0));
+
+            $overtimeHours  = max(0.0, (float)($_POST["overtime_hours"] ?? 0));
+            $overtimeRate   = max(0.0, (float)($_POST["overtime_rate"] ?? 0));
+            $overtimePay    = max(0.0, (float)($_POST["overtime_pay"] ?? 0));
+            $allowances     = max(0.0, (float)($_POST["allowances"] ?? 0));
+
+            $sssDeduction        = max(0.0, (float)($_POST["sss_deduction"] ?? 0));
+            $philhealthDeduction = max(0.0, (float)($_POST["philhealth_deduction"] ?? 0));
+            $pagibigDeduction    = max(0.0, (float)($_POST["pagibig_deduction"] ?? 0));
+            $taxDeduction        = max(0.0, (float)($_POST["tax_deduction"] ?? 0));
+            $otherDeductions     = max(0.0, (float)($_POST["other_deductions"] ?? 0));
+
+            $grossPay        = max(0.0, (float)($_POST["gross_pay"] ?? ($baseSalary + $overtimePay + $allowances)));
+            $totalDeductions = max(0.0, (float)($_POST["deductions"] ?? ($sssDeduction + $philhealthDeduction + $pagibigDeduction + $taxDeduction + $otherDeductions)));
+            $netPay          = max(0.0, $grossPay - $totalDeductions);
+
+            $upQuery = "UPDATE payroll_records SET
+                reference_no = ?, pay_period_start = ?, pay_period_end = ?, salary_type = ?,
+                base_salary = ?, hours_worked = ?, days_worked = ?, hourly_rate = ?,
+                overtime_hours = ?, overtime_rate = ?, overtime_pay = ?, allowances = ?,
+                gross_pay = ?, sss_deduction = ?, philhealth_deduction = ?, pagibig_deduction = ?,
+                tax_deduction = ?, other_deductions = ?, deductions = ?, net_pay = ?,
+                payment_date = ?, payment_method = ?, status = ?, notes = ?, processed_by = ?
+                WHERE payroll_id = ?";
+
+            $upStmt = $conn->prepare($upQuery);
+            $upStmt->bind_param(
+                "ssssddddddddddddddddssssii",
+                $referenceNo,
+                $payPeriodStart,
+                $payPeriodEnd,
+                $salaryType,
+                $baseSalary,
+                $hoursWorked,
+                $daysWorked,
+                $hourlyRate,
+                $overtimeHours,
+                $overtimeRate,
+                $overtimePay,
+                $allowances,
+                $grossPay,
+                $sssDeduction,
+                $philhealthDeduction,
+                $pagibigDeduction,
+                $taxDeduction,
+                $otherDeductions,
+                $totalDeductions,
+                $netPay,
+                $paymentDate,
+                $paymentMethod,
+                $status,
+                $notes,
+                $currentUserId,
+                $payrollId
+            );
+
+            if ($upStmt->execute()) {
+                $success = "Payroll record #$payrollId ($referenceNo) was updated successfully.";
+                log_activity($conn, $currentUserId, "SALARY_UPDATED", "Updated salary record #$payrollId ($referenceNo, Net: ₱" . number_format($netPay, 2) . ")");
+            } else {
+                $error = "Error updating payroll record: " . $conn->error;
+            }
         }
     }
 
@@ -943,11 +954,11 @@ if ($payrollRes) {
                                                         ✓ Pay
                                                     </button>
                                                 </form>
-                                            <?php endif; ?>
 
-                                            <button class="btn btn-sm btn-secondary" onclick='openEditSalaryModal(<?= json_encode($p, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)' title="Edit Voucher">
-                                                Edit
-                                            </button>
+                                                <button class="btn btn-sm btn-secondary" onclick='openEditSalaryModal(<?= json_encode($p, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)' title="Edit Voucher">
+                                                    Edit
+                                                </button>
+                                            <?php endif; ?>
 
                                             <form method="POST" action="index.php" style="display:inline;">
                                                 <input type="hidden" name="action" value="delete_salary">
@@ -1825,6 +1836,10 @@ if ($payrollRes) {
 
         // Edit Salary Modal Population
         function openEditSalaryModal(p) {
+            if (p.status === 'paid') {
+                posAlert("This voucher is already marked as PAID and cannot be modified.", "Action Not Allowed", "warning");
+                return;
+            }
             document.getElementById('edit_payroll_id').value = p.payroll_id;
             document.getElementById('edit_employee_name').value = p.employee_name || p.employee_username;
             document.getElementById('edit_ref_no').value = p.reference_no || ('PAY-' + p.payroll_id);

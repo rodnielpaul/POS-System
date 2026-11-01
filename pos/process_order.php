@@ -82,19 +82,31 @@ try {
         throw new Exception("No valid items in cart.");
     }
 
-    // 2. Compute Tax and Discount
+    // 2. Compute Tax and Discount (BIR Compliance)
     $discountAmount = 0.00;
     $taxAmount = 0.00;
+    $vatableSales = 0.00;
+    $vatExemptSales = 0.00;
+    $zeroRatedSales = 0.00;
 
     if (in_array($discountType, ["senior", "pwd"], true)) {
         // Philippine Statutory Rule: VAT Exempt + 20% discount
         $taxAmount = 0.00;
         $discountAmount = round($subtotal * 0.20, 2);
         $grandTotal = round($subtotal - $discountAmount, 2);
+        $vatableSales = 0.00;
+        $vatExemptSales = $subtotal;
     } else {
         // Standard Tax Calculation based on selected tax rate
-        $taxAmount = round($subtotal * ($taxRate / 100), 2);
-        $grandTotal = round($subtotal + $taxAmount, 2);
+        if ($taxRate > 0) {
+            $vatableSales = $subtotal;
+            $taxAmount = round($subtotal * ($taxRate / 100), 2);
+            $grandTotal = round($subtotal + $taxAmount, 2);
+        } else {
+            $vatExemptSales = $subtotal;
+            $taxAmount = 0.00;
+            $grandTotal = $subtotal;
+        }
     }
 
     // Validate cash payment
@@ -170,6 +182,9 @@ try {
             "cashier" => $cashierName,
             "items" => $processedItems,
             "subtotal" => $subtotal,
+            "vatableSales" => $vatableSales,
+            "vatExemptSales" => $vatExemptSales,
+            "zeroRatedSales" => $zeroRatedSales,
             "taxRate" => $taxRate,
             "taxAmount" => $taxAmount,
             "discountType" => $discountType,

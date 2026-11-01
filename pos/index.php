@@ -554,12 +554,16 @@ if ($settRes) {
             <div class="cart-summary-area">
                 <div class="form-row" style="margin-bottom:10px; gap:8px;">
                     <div class="form-group" style="margin-bottom:0; flex:1;">
-                        <label style="font-size:0.78rem; margin-bottom:3px;">Tax Rate (Line 10)</label>
-                        <select id="tax-rate-select" class="form-control" style="padding:6px 10px; font-size:0.85rem;" onchange="calculateCart()">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                            <label style="font-size:0.78rem; margin-bottom:0;">Tax Rate (Line 10)</label>
+                            <a href="javascript:void(0)" onclick="openTaxSettingsModal()" style="font-size:0.72rem; color:var(--primary); font-weight:700; text-decoration:none;" title="Edit Store Default Tax Rate">⚙️ Edit Tax</a>
+                        </div>
+                        <select id="tax-rate-select" class="form-control" style="padding:6px 10px; font-size:0.85rem;" onchange="onTaxRateChange()">
                             <option value="12" <?= $settings["tax_rate"] == "12" ? "selected" : "" ?>>12% Standard VAT</option>
-                            <option value="16">16% Tax</option>
-                            <option value="20">20% Tax</option>
-                            <option value="0">0% (Tax Exempt)</option>
+                            <option value="16" <?= $settings["tax_rate"] == "16" ? "selected" : "" ?>>16% Tax</option>
+                            <option value="20" <?= $settings["tax_rate"] == "20" ? "selected" : "" ?>>20% Tax</option>
+                            <option value="0" <?= $settings["tax_rate"] == "0" ? "selected" : "" ?>>0% (Tax Exempt)</option>
+                            <option value="custom" <?= (!in_array($settings["tax_rate"], ["12", "16", "20", "0"])) ? "selected" : "" ?>>✏️ Custom Rate...</option>
                         </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0; flex:1;">
@@ -569,6 +573,22 @@ if ($settRes) {
                             <option value="senior">Senior Citizen (20%)</option>
                             <option value="pwd">PWD (20%)</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Custom Tax Rate Input Box (Visible when 'custom' is selected) -->
+                <div class="form-group" id="custom-tax-box" style="<?= (!in_array($settings["tax_rate"], ["12", "16", "20", "0"])) ? 'display:block;' : 'display:none;' ?> margin-bottom:10px;">
+                    <label style="font-size:0.78rem; color:var(--primary); font-weight:700; margin-bottom:3px; display:block;">
+                        Enter Custom Tax Rate (%)
+                    </label>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="number" id="custom-tax-rate-input" class="form-control" 
+                               style="padding:6px 10px; font-size:0.85rem;" 
+                               min="0" max="100" step="0.01" 
+                               value="<?= htmlspecialchars($settings["tax_rate"]) ?>" 
+                               placeholder="e.g. 10.00" 
+                               oninput="calculateCart()">
+                        <span style="font-weight:700; font-size:0.9rem; color:var(--gray-600);">%</span>
                     </div>
                 </div>
 
@@ -585,7 +605,7 @@ if ($settRes) {
                     <span>₱<span id="disp-subtotal">0.00</span></span>
                 </div>
                 <div class="summary-line" id="disp-tax-row">
-                    <span>VAT / Tax (<span id="disp-tax-rate">12</span>%):</span>
+                    <span id="disp-tax-label">VAT / Tax (<span id="disp-tax-rate">12</span>%):</span>
                     <span>₱<span id="disp-tax-amount">0.00</span></span>
                 </div>
                 <div class="summary-line" id="disp-discount-row" style="color:#b45309; display:none;">
@@ -764,8 +784,8 @@ if ($settRes) {
                         <span>₱<span id="rcpt-subtotal"></span></span>
                     </div>
                     <div class="receipt-row" id="rcpt-tax-row">
-                        <span>VAT (<span id="rcpt-tax-rate"></span>%):</span>
-                        <span>₱<span id="rcpt-tax-amount"></span></span>
+                        <span id="rcpt-tax-label">VAT (<span id="rcpt-tax-rate">12</span>%):</span>
+                        <span>₱<span id="rcpt-tax-amount">0.00</span></span>
                     </div>
                     <div class="receipt-row" id="rcpt-discount-row" style="display:none;">
                         <span>Discount (<span id="rcpt-discount-type"></span>):</span>
@@ -800,6 +820,29 @@ if ($settRes) {
                         <span id="rcpt-reference-no"></span>
                     </div>
 
+                    <div class="receipt-divider"></div>
+
+                    <!-- BIR Tax Breakdown (Option 3) -->
+                    <div class="receipt-row receipt-bold" style="font-size:11px; margin-bottom:2px;">
+                        <span>TAX SUMMARY</span>
+                    </div>
+                    <div class="receipt-row" style="font-size:11px;">
+                        <span>VATable Sales:</span>
+                        <span>₱<span id="rcpt-vatable-sales">0.00</span></span>
+                    </div>
+                    <div class="receipt-row" style="font-size:11px;">
+                        <span>VAT-Exempt Sales:</span>
+                        <span>₱<span id="rcpt-vatexempt-sales">0.00</span></span>
+                    </div>
+                    <div class="receipt-row" style="font-size:11px;">
+                        <span>Zero-Rated Sales:</span>
+                        <span>₱<span id="rcpt-zerorated-sales">0.00</span></span>
+                    </div>
+                    <div class="receipt-row" style="font-size:11px;">
+                        <span id="rcpt-vat-breakdown-label">VAT Amount (12%):</span>
+                        <span>₱<span id="rcpt-vat-amount">0.00</span></span>
+                    </div>
+
                     <div class="receipt-footer">
                         <div class="receipt-divider"></div>
                         <div id="rcpt-footer-msg">Thank you for dining with us!</div>
@@ -815,6 +858,41 @@ if ($settRes) {
                     ➕ New Sale
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: Store Tax Settings -->
+    <div class="modal-overlay" id="tax-settings-modal">
+        <div class="modal-card" style="max-width:440px;">
+            <div class="modal-header">
+                <h3 class="modal-title">⚙️ Configure Store Tax Rate</h3>
+                <button class="modal-close" onclick="closeModal('tax-settings-modal')">&times;</button>
+            </div>
+            <form id="tax-settings-form" onsubmit="saveTaxSettings(event)">
+                <div class="modal-body" style="padding:20px;">
+                    <p style="font-size:0.88rem; color:var(--gray-600); margin-bottom:16px;">
+                        Update the store's default Value-Added Tax (VAT) rate. This setting is saved to the database and applies across the system.
+                    </p>
+                    <div class="form-group" style="margin-bottom:14px;">
+                        <label for="store_tax_rate" style="font-weight:700; font-size:0.85rem; margin-bottom:6px; display:block;">
+                            Default Tax Rate (%) *
+                        </label>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="number" id="store_tax_rate" class="form-control" 
+                                   min="0" max="100" step="0.01" 
+                                   value="<?= htmlspecialchars($settings['tax_rate']) ?>" required>
+                            <span style="font-size:1.1rem; font-weight:800; color:var(--gray-700);">%</span>
+                        </div>
+                        <small style="color:var(--gray-500); font-size:0.75rem; display:block; margin-top:4px;">
+                            Standard Philippine VAT is 12.00%. Enter 0 for Tax-Exempt.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer" style="justify-content:flex-end; gap:10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('tax-settings-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-tax">Save Changes</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -981,6 +1059,99 @@ if ($settRes) {
             }
         }
 
+        function getEffectiveTaxRate() {
+            const sel = document.getElementById('tax-rate-select').value;
+            if (sel === 'custom') {
+                const customIn = document.getElementById('custom-tax-rate-input');
+                const val = parseFloat(customIn ? customIn.value : 0);
+                return isNaN(val) ? 0 : Math.max(0, val);
+            }
+            return parseFloat(sel) || 0;
+        }
+
+        function onTaxRateChange() {
+            const sel = document.getElementById('tax-rate-select').value;
+            const box = document.getElementById('custom-tax-box');
+            if (sel === 'custom') {
+                box.style.display = 'block';
+                const input = document.getElementById('custom-tax-rate-input');
+                if (input) input.focus();
+            } else {
+                box.style.display = 'none';
+            }
+            calculateCart();
+        }
+
+        function openTaxSettingsModal() {
+            document.getElementById('tax-settings-modal').classList.add('active');
+            setTimeout(() => {
+                const inEl = document.getElementById('store_tax_rate');
+                if (inEl) inEl.focus();
+            }, 100);
+        }
+
+        function saveTaxSettings(e) {
+            e.preventDefault();
+            const rateInput = document.getElementById('store_tax_rate');
+            const newRate = parseFloat(rateInput.value);
+
+            if (isNaN(newRate) || newRate < 0 || newRate > 100) {
+                posAlert("Please enter a valid tax rate between 0% and 100%.", "Invalid Tax Rate", "warning");
+                return;
+            }
+
+            const btn = document.getElementById('btn-save-tax');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            fetch('update_tax_settings.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ taxRate: newRate })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+
+                if (data.success) {
+                    closeModal('tax-settings-modal');
+                    posToast(`Default tax rate updated to ${data.taxRate}%!`, "success", 3000);
+
+                    // Update UI select option or custom input
+                    const taxSel = document.getElementById('tax-rate-select');
+                    let foundMatch = false;
+                    for (let opt of taxSel.options) {
+                        if (parseFloat(opt.value) === parseFloat(data.taxRate)) {
+                            taxSel.value = opt.value;
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+
+                    const customBox = document.getElementById('custom-tax-box');
+                    const customIn = document.getElementById('custom-tax-rate-input');
+                    if (customIn) customIn.value = data.taxRate;
+
+                    if (!foundMatch) {
+                        taxSel.value = 'custom';
+                        if (customBox) customBox.style.display = 'block';
+                    } else {
+                        if (customBox) customBox.style.display = 'none';
+                    }
+
+                    calculateCart();
+                } else {
+                    posAlert("Error: " + data.message, "Update Failed", "danger");
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+                posAlert("Network error updating tax rate settings.", "Connection Error", "danger");
+            });
+        }
+
         function onDiscountChange() {
             const discType = document.getElementById('discount-select').value;
             const idBox = document.getElementById('discount-id-box');
@@ -999,7 +1170,7 @@ if ($settRes) {
                 subtotal += c.price * c.qty;
             });
 
-            const taxRate = parseFloat(document.getElementById('tax-rate-select').value) || 0;
+            const taxRate = getEffectiveTaxRate();
             const discountType = document.getElementById('discount-select').value;
 
             let taxAmount = 0;
@@ -1012,14 +1183,17 @@ if ($settRes) {
                 discountAmount = subtotal * 0.20;
                 grandTotal = subtotal - discountAmount;
                 document.getElementById('disp-discount-row').style.display = 'flex';
-                document.getElementById('disp-tax-row').style.display = 'none';
+                document.getElementById('disp-tax-row').style.display = 'flex';
+                document.getElementById('disp-tax-label').innerHTML = 'VAT (0% Exempt):';
+                document.getElementById('disp-tax-amount').textContent = '0.00';
             } else {
                 taxAmount = subtotal * (taxRate / 100);
                 discountAmount = 0;
                 grandTotal = subtotal + taxAmount;
                 document.getElementById('disp-discount-row').style.display = 'none';
                 document.getElementById('disp-tax-row').style.display = 'flex';
-                document.getElementById('disp-tax-rate').textContent = taxRate;
+                document.getElementById('disp-tax-label').innerHTML = `VAT / Tax (<span id="disp-tax-rate">${taxRate}</span>%):`;
+                document.getElementById('disp-tax-amount').textContent = taxAmount.toFixed(2);
             }
 
             currentTotal = grandTotal;
@@ -1204,7 +1378,7 @@ if ($settRes) {
             const payload = {
                 cart: cart,
                 paymentMethod: method,
-                taxRate: parseFloat(document.getElementById('tax-rate-select').value) || 0,
+                taxRate: getEffectiveTaxRate(),
                 discountType: document.getElementById('discount-select').value,
                 discountIdNo: document.getElementById('discount-id-no').value.trim(),
                 amountPaid: amountPaid,
@@ -1274,14 +1448,40 @@ if ($settRes) {
             document.getElementById('rcpt-amount-paid').textContent = parseFloat(receipt.amountPaid).toFixed(2);
             document.getElementById('rcpt-change').textContent = parseFloat(receipt.changeAmount).toFixed(2);
 
-            // Tax
+            // Tax Line (Always shown)
             const taxRow = document.getElementById('rcpt-tax-row');
-            if (receipt.taxAmount > 0) {
-                taxRow.style.display = 'flex';
-                document.getElementById('rcpt-tax-rate').textContent = receipt.taxRate;
-                document.getElementById('rcpt-tax-amount').textContent = parseFloat(receipt.taxAmount).toFixed(2);
+            taxRow.style.display = 'flex';
+            const taxLabel = document.getElementById('rcpt-tax-label');
+            const isExempt = (receipt.discountType && receipt.discountType !== 'none') || parseFloat(receipt.taxRate) === 0;
+            const taxAmt = parseFloat(receipt.taxAmount) || 0;
+
+            if (taxAmt > 0) {
+                if (taxLabel) taxLabel.innerHTML = `VAT (${receipt.taxRate}%):`;
+                document.getElementById('rcpt-tax-amount').textContent = taxAmt.toFixed(2);
+            } else if (isExempt) {
+                if (taxLabel) taxLabel.innerHTML = `VAT (0% Exempt):`;
+                document.getElementById('rcpt-tax-amount').textContent = '0.00';
             } else {
-                taxRow.style.display = 'none';
+                if (taxLabel) taxLabel.innerHTML = `VAT (0%):`;
+                document.getElementById('rcpt-tax-amount').textContent = '0.00';
+            }
+
+            // BIR Tax Breakdown (Option 3)
+            const vatableSales = receipt.vatableSales !== undefined 
+                ? parseFloat(receipt.vatableSales) 
+                : (taxAmt > 0 ? parseFloat(receipt.subtotal) : 0);
+            const vatExemptSales = receipt.vatExemptSales !== undefined 
+                ? parseFloat(receipt.vatExemptSales) 
+                : (taxAmt > 0 ? 0 : parseFloat(receipt.subtotal));
+            const zeroRatedSales = receipt.zeroRatedSales !== undefined ? parseFloat(receipt.zeroRatedSales) : 0;
+            const vatRate = receipt.taxRate || 12;
+
+            if (document.getElementById('rcpt-vatable-sales')) {
+                document.getElementById('rcpt-vatable-sales').textContent = vatableSales.toFixed(2);
+                document.getElementById('rcpt-vatexempt-sales').textContent = vatExemptSales.toFixed(2);
+                document.getElementById('rcpt-zerorated-sales').textContent = zeroRatedSales.toFixed(2);
+                document.getElementById('rcpt-vat-breakdown-label').textContent = `VAT Amount (${isExempt && taxAmt === 0 ? '0%' : vatRate + '%'}):`;
+                document.getElementById('rcpt-vat-amount').textContent = taxAmt.toFixed(2);
             }
 
             // Discount
